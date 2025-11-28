@@ -77,8 +77,11 @@ cdef extern from "libraw.h":
         int flip
         libraw_raw_inset_crop_t[2] raw_inset_crops
         
+    ctypedef struct libraw_dng_levels_t:
+        float baseline_exposure
+
     ctypedef struct libraw_colordata_t:
-        float       cam_mul[4] 
+        float       cam_mul[4]
         float       pre_mul[4]
         ushort      curve[0x10000] # 65536
         unsigned    cblack[4102]
@@ -87,6 +90,7 @@ cdef extern from "libraw.h":
         unsigned    linear_max[4]
         float       cmatrix[3][4]
         float       cam_xyz[4][3]
+        libraw_dng_levels_t dng_levels
         void        *profile # a string?
         unsigned    profile_length
 
@@ -798,6 +802,21 @@ cdef class RawPy:
             shape[0] = <np.npy_intp> 65536
             return np.PyArray_SimpleNewFromData(1, shape, np.NPY_USHORT,
                                                 &self.p.imgdata.rawdata.color.curve)
+
+    property baseline_exposure:
+        """
+        DNG baseline exposure value, if present in the file.
+        This value is an exposure compensation in stops (EV).
+        
+        :rtype: float, or None if not available
+        """
+        def __get__(self):
+            self.ensure_unpack()
+            # LibRaw initializes baseline_exposure to -1000.0f if the tag is not present.
+            cdef float val = self.p.imgdata.color.dng_levels.baseline_exposure
+            if val <= -999.0:
+                return None
+            return val
 
     def dcraw_process(self, params=None, **kw):
         """
