@@ -10,24 +10,18 @@ CHECK_SHA256=.github/scripts/check_sha256.sh
 # List python versions
 ls /opt/python
 
-if [ $PYTHON_VERSION == "3.9" ]; then
-    PYBIN="/opt/python/cp39-cp39/bin"
-elif [ $PYTHON_VERSION == "3.10" ]; then
-    PYBIN="/opt/python/cp310-cp310/bin"
-elif [ $PYTHON_VERSION == "3.11" ]; then
-    PYBIN="/opt/python/cp311-cp311/bin"
-elif [ $PYTHON_VERSION == "3.12" ]; then
-    PYBIN="/opt/python/cp312-cp312/bin"
-elif [ $PYTHON_VERSION == "3.13" ]; then
-    PYBIN="/opt/python/cp313-cp313/bin"
-else
-    echo "Unsupported Python version $PYTHON_VERSION"
+# Compute PYBIN from PYTHON_VERSION (e.g., "3.14" -> "cp314-cp314")
+PYVER_NO_DOT=${PYTHON_VERSION//./}
+PYBIN="/opt/python/cp${PYVER_NO_DOT}-cp${PYVER_NO_DOT}/bin"
+
+if [ ! -d "$PYBIN" ]; then
+    echo "Python version $PYTHON_VERSION not found at $PYBIN"
     exit 1
 fi
 
 # Install zlib:
 # - libraw DNG deflate codec support
-retry yum install -y zlib-devel
+retry dnf install -y zlib-devel
 
 # Install liblcms2:
 # - libraw LCMS support
@@ -40,16 +34,18 @@ pushd lcms2-2.11
 make install -j$(nproc)
 popd
 
-# Install libjpeg:
+# Install libjpeg-turbo:
 # - pillow (a scikit-image dependency) dependency
 # - libjasper dependency
 # - libraw DNG lossy codec support (requires libjpeg >= 8)
-# TODO: switch to libjpeg-turbo
-curl --retry 3 -o jpegsrc.tar.gz http://ijg.org/files/jpegsrc.v9d.tar.gz
-$CHECK_SHA256 jpegsrc.tar.gz 2303a6acfb6cc533e0e86e8a9d29f7e6079e118b9de3f96e07a71a11c082fa6a
-tar xzf jpegsrc.tar.gz
-pushd jpeg-9d
-./configure --prefix=/usr
+curl -L --retry 3 -o libjpeg-turbo.tar.gz https://github.com/libjpeg-turbo/libjpeg-turbo/releases/download/3.1.3/libjpeg-turbo-3.1.3.tar.gz
+$CHECK_SHA256 libjpeg-turbo.tar.gz 075920b826834ac4ddf97661cc73491047855859affd671d52079c6867c1c6c0
+tar xzf libjpeg-turbo.tar.gz
+pushd libjpeg-turbo-3.1.3
+mkdir build
+cd build
+cmake .. -DCMAKE_INSTALL_PREFIX=/usr -DCMAKE_BUILD_TYPE=Release \
+      -DENABLE_SHARED=ON -DENABLE_STATIC=OFF -DWITH_JPEG8=ON
 make install -j$(nproc)
 popd
 
@@ -85,10 +81,14 @@ make install -j$(nproc)
 popd
 
 # Install matplotlib (a scikit-image dependency) dependencies
-retry yum install -y libpng-devel freetype-devel
+retry dnf install -y libpng-devel freetype-devel
 
 # Install numpy/scipy deps
-retry yum install -y lapack-devel blas-devel
+retry dnf install -y lapack-devel blas-devel
+
+# Upgrade pip and prefer binary packages
+${PYBIN}/python -m pip install --upgrade pip
+export PIP_PREFER_BINARY=1
 
 # install compile-time dependencies
 retry ${PYBIN}/pip install numpy==${NUMPY_VERSION} cython setuptools

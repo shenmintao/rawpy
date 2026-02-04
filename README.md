@@ -166,5 +166,57 @@ The above will download all build dependencies (including a Python installation)
 and is fully configured through the four environment variables.
 Set `USE_CONDA = '0'` to build within an existing Python environment.
 
+## FAQ
+
+### I'm getting deadlocks when using multiprocessing on Linux
+
+If you're experiencing deadlocks when using rawpy with Python's `multiprocessing` module on Linux, this is caused by an interaction between OpenMP (which is enabled in the Linux wheels) and the default `fork` start method used by multiprocessing.
+
+**The Problem:**
+When a process using OpenMP is forked, OpenMP's internal thread pool state becomes inconsistent in the child process, which can cause deadlocks on subsequent calls to rawpy functions.
+
+**The Solution:**
+Use the `spawn` or `forkserver` start method instead of `fork`:
+
+```python
+import multiprocessing as mp
+import rawpy
+
+def process_raw(filename):
+    with rawpy.imread(filename) as raw:
+        rgb = raw.postprocess()
+    return rgb
+
+if __name__ == '__main__':
+    # Set the start method to 'spawn' before creating any processes
+    mp.set_start_method('spawn')
+    
+    with mp.Pool(processes=4) as pool:
+        results = pool.map(process_raw, ['image1.nef', 'image2.nef'])
+```
+
+**Note:** The start method can only be set once per program, and must be called within an `if __name__ == '__main__':` guard. The `spawn` method creates a fresh Python interpreter process, avoiding the OpenMP thread state issue entirely.
+
+For more information, see:
+- [Python multiprocessing documentation on start methods](https://docs.python.org/3/library/multiprocessing.html#contexts-and-start-methods)
+- [OpenMP and fork() interaction issues](https://github.com/isl-org/Open3D/wiki/Deadlock-with-multiprocessing-(using-fork)-and-OpenMP)
+
+### I'm getting "LibRawFileUnsupportedError: Unsupported file format or not RAW file"
+
+This error occurs when rawpy/LibRaw cannot recognize the file as a supported RAW image format. Common causes include:
+
+1. **The file is not actually a RAW file** - Make sure you're trying to open a RAW image file (e.g., .NEF, .CR2, .ARW, .DNG, etc.) and not a regular image format like JPEG or PNG.
+
+2. **The file is corrupted or incomplete** - If the file was not fully downloaded or is damaged, LibRaw cannot read it properly.
+
+3. **The file lacks proper headers** - Some proprietary or headerless RAW formats are not supported by LibRaw. RAW files need to contain proper metadata headers that identify the camera model, sensor configuration, and other essential information for LibRaw to decode them.
+
+4. **Unsupported camera or RAW format** - While LibRaw supports a [wide range of cameras](https://www.libraw.org/supported-cameras), some very new or obscure camera models may not be supported yet. Check the LibRaw website for the list of supported cameras.
+
+**What you can do:**
+- Verify the file is a genuine RAW file from a supported camera
+- Try opening the file with the camera manufacturer's software to confirm it's valid
+- Check if you're using the latest version of rawpy, as newer versions may support additional cameras
+- If you have a headerless or proprietary RAW format, you may need to convert it to a standard format like DNG using the camera manufacturer's tools first
 
 [libraw]: https://www.libraw.org
