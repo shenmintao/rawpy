@@ -118,6 +118,12 @@ if (!$env:NUMPY_VERSION) {
 }
 
 Initialize-VS
+
+# Tell setuptools/distutils to use the current SDK environment instead of
+# calling vcvarsall.bat again. This avoids compatibility issues with newer
+# Visual Studio versions (e.g., VS 2026) where vcvarsall.bat may fail.
+$env:DISTUTILS_USE_SDK = "1"
+
 Initialize-Python
 
 # Prefer binary packages over building from source
