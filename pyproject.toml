@@ -1,31 +1,36 @@
 [build-system]
 requires = [
-    "setuptools>=42",
+    "setuptools>=69.0.0",
     "wheel",
-    "cython",
-    "numpy>=1.26.0"
+    "Cython>=0.29.32",
+    "cmake",
+    # Build against NumPy 2.x headers. Extensions compiled with NumPy 2.0+
+    # are backward-compatible with NumPy >= 1.19 at runtime.
+    "numpy>=2.0.0",
 ]
 build-backend = "setuptools.build_meta"
 
 [project]
 name = "rawpy"
-version = "0.25.1"
-authors = [{name = "Maik Riechert"}]
+dynamic = ["version"]
 description = "RAW image processing for Python, a wrapper for libraw"
 readme = "README.md"
-requires-python = ">=3.9"
-license = { text = "MIT License" }
+authors = [
+  {name = "Maik Riechert"}
+]
+license = "MIT"
 classifiers = [
     "Development Status :: 4 - Beta",
     "Intended Audience :: Developers",
     "Natural Language :: English",
-    "License :: OSI Approved :: MIT License",
     "Programming Language :: Cython",
     "Programming Language :: Python :: 3",
     "Programming Language :: Python :: 3.9",
     "Programming Language :: Python :: 3.10",
     "Programming Language :: Python :: 3.11",
     "Programming Language :: Python :: 3.12",
+    "Programming Language :: Python :: 3.13",
+    "Programming Language :: Python :: 3.14",
     "Operating System :: MacOS",
     "Operating System :: Microsoft :: Windows",
     "Operating System :: POSIX",
@@ -33,22 +38,46 @@ classifiers = [
     "Topic :: Multimedia :: Graphics",
     "Topic :: Software Development :: Libraries",
 ]
+requires-python = ">=3.9"
 dependencies = [
-    "numpy >= 1.26.0",
+    "numpy>=1.26.0"
 ]
 
 [project.urls]
 Homepage = "https://github.com/letmaik/rawpy"
+Documentation = "https://letmaik.github.io/rawpy/"
+Repository = "https://github.com/letmaik/rawpy.git"
+Issues = "https://github.com/letmaik/rawpy/issues"
+Changelog = "https://github.com/letmaik/rawpy/releases"
 
 [project.optional-dependencies]
-dev = [
-    "wheel>=0.31.0",
-    "delocate; sys_platform == 'darwin'",
-    "cython",
-    "scikit-image",
+test = [
     "pytest",
     "imageio>=2.21",
-    "setuptools",
-    "sphinx_rtd_theme",
-    "sphinx",
+    "mypy",
+    "scikit-image",
 ]
+
+[tool.setuptools.packages.find]
+include = ["rawpy*"]
+
+[tool.mypy]
+# Global mypy configuration for rawpy project
+warn_unused_configs = true
+check_untyped_defs = true
+
+# Selectively ignore missing imports for optional dependencies
+[[tool.mypy.overrides]]
+module = [
+    "skimage.*",
+    "cv2",
+    "scipy.*",
+    "imageio",
+    "imageio.*",
+    "imageio.v3"
+]
+ignore_missing_imports = true
+
+[tool.pytest.ini_options]
+minversion = "6.0"
+testpaths = ["test"]

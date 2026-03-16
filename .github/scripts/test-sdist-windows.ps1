@@ -4,7 +4,6 @@ function exec {
     [CmdletBinding()]
     param([Parameter(Position=0,Mandatory=1)][scriptblock]$cmd)
     Write-Host "$cmd"
-    # https://stackoverflow.com/q/2095088
     $ErrorActionPreference = 'Continue'
     & $cmd
     $ErrorActionPreference = 'Stop'
@@ -14,18 +13,11 @@ function exec {
 }
 
 function Initialize-VS {
-    # https://wiki.python.org/moin/WindowsCompilers
-    # setuptools automatically selects the right compiler for building
-    # the extension module. The following is mostly for building any
-    # native dependencies, here via CMake.
-    # https://docs.microsoft.com/en-us/cpp/build/building-on-the-command-line
-    # https://docs.microsoft.com/en-us/cpp/porting/binary-compat-2015-2017
-
     $VS_ROOTS = @(
         "C:\Program Files\Microsoft Visual Studio",
         "C:\Program Files (x86)\Microsoft Visual Studio"
     )
-    $VS_VERSIONS = @("2017", "2019", "2022","18")
+    $VS_VERSIONS = @("2017", "2019", "2022")
     $VS_EDITIONS = @("Enterprise", "Professional", "Community")
     $VS_INIT_CMD_SUFFIX = "Common7\Tools\vsdevcmd.bat"
 
@@ -51,7 +43,6 @@ function Initialize-VS {
 
     Write-Host "Executing: $VS_INIT_CMD $VS_INIT_ARGS"
 
-    # https://github.com/Microsoft/vswhere/wiki/Start-Developer-Command-Prompt
     & "${env:COMSPEC}" /s /c "`"$VS_INIT_CMD`" $VS_INIT_ARGS && set" | foreach-object {
         $name, $value = $_ -split '=', 2
         try {
@@ -70,30 +61,29 @@ if ($env:PYTHON_ARCH -ne 'x86' -and $env:PYTHON_ARCH -ne 'x86_64') {
 
 Initialize-VS
 
-# Tell setuptools/distutils to use the current SDK environment instead of
-# calling vcvarsall.bat again. This avoids compatibility issues with newer
-# Visual Studio versions (e.g., VS 2026) where vcvarsall.bat may fail.
-$env:DISTUTILS_USE_SDK = "1"
-
 # Check Python version
 exec { python -c "import platform; assert platform.python_version().startswith('$env:PYTHON_VERSION')" }
 
-# Prefer binary packages over building from source
-$env:PIP_PREFER_BINARY = 1
-
-Get-ChildItem env:
-
-# Install vcpkg and build dependencies
+# Install vcpkg dependencies (needed for building from source)
 if (!(Test-Path ./vcpkg)) {
-    exec { git clone https://github.com/microsoft/vcpkg -b 2025.01.13 --depth 1}
+    exec { git clone https://github.com/microsoft/vcpkg -b 2025.01.13 --depth 1 }
     exec { ./vcpkg/bootstrap-vcpkg }
 }
 exec { ./vcpkg/vcpkg install zlib libjpeg-turbo[jpeg8] jasper lcms --triplet=x64-windows-static --recurse }
 $env:CMAKE_PREFIX_PATH = $pwd.Path + "\vcpkg\installed\x64-windows-static"
 
-# Build the wheel in a virtual environment
-exec { python -m venv env\build }
-& .\env\build\scripts\activate
+# Create a clean venv and install the sdist
+exec { python -m venv sdist-test-env }
+& .\sdist-test-env\scripts\activate
 exec { python -m pip install --upgrade pip }
-exec { python -m pip wheel . --wheel-dir dist --no-deps }
+
+$sdist = Get-ChildItem dist\rawpy-*.tar.gz | Select-Object -First 1
+exec { pip install "$($sdist.FullName)[test]" }
+
+# Run tests from a temp directory to avoid importing from the source tree
+mkdir -f tmp_for_test | out-null
+pushd tmp_for_test
+exec { pytest --verbosity=3 -s ../test }
+popd
+
 deactivate
