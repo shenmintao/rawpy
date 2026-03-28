@@ -76,7 +76,9 @@ def _ask_pkg_config(resultlist, option, result_prefix="", sysroot=False):
 def use_pkg_config():
     pkg_config = os.environ.get("PKG_CONFIG", "pkg-config")
     if subprocess.call([pkg_config, "--atleast-version=0.21", "libraw_r"]) != 0:
-        raise SystemExit("ERROR: System LibRaw is too old or not found. rawpy requires LibRaw >= 0.21.")
+        raise SystemExit(
+            "ERROR: System LibRaw is too old or not found. rawpy requires LibRaw >= 0.21."
+        )
     _ask_pkg_config(include_dirs, "--cflags-only-I", "-I", sysroot=True)
     _ask_pkg_config(extra_compile_args, "--cflags-only-other")
     _ask_pkg_config(library_dirs, "--libs-only-L", "-L", sysroot=True)
@@ -100,6 +102,23 @@ def get_cmake_build_dir():
 
 def get_install_dir():
     return os.path.join(get_cmake_build_dir(), "install")
+
+
+def get_windows_cmake_generator():
+    """Return (generator_flag_str, extra_build_args) for the best available generator.
+
+    Priority: Ninja > NMake Makefiles > VS default (multi-config).
+    The VS default generator does not accept -DCMAKE_BUILD_TYPE, so the build
+    command must pass --config Release instead.
+    """
+    if shutil.which("ninja"):
+        return '-G "Ninja"', []
+    if shutil.which("nmake"):
+        return '-G "NMake Makefiles"', []
+    # No single-config generator found; fall back to the default VS generator.
+    # Multi-config generators ignore CMAKE_BUILD_TYPE, so we pass --config at
+    # build time instead.
+    return "", ["--config", "Release"]
 
 
 def windows_libraw_compile():
@@ -153,12 +172,25 @@ def windows_libraw_compile():
     # Important: always use Release build type, otherwise the library will depend on a
     #            debug version of OpenMP which is not what we bundle it with, and then it would fail
     enable_openmp_flag = "ON" if has_openmp_dll else "OFF"
+    cmake_prefix_path = os.environ.get("CMAKE_PREFIX_PATH", "")
+    cmake_prefix_path_flag = (
+        ("-DCMAKE_PREFIX_PATH=" + cmake_prefix_path + " ") if cmake_prefix_path else ""
+    )
+
+    generator_flag, extra_build_args = get_windows_cmake_generator()
+    # Single-config generators (Ninja, NMake) respect CMAKE_BUILD_TYPE.
+    # Multi-config generators (VS default) need --config at build time instead.
+    build_type_flag = "-DCMAKE_BUILD_TYPE=Release " if not extra_build_args else ""
+    build_cmd = (
+        cmake + " --build . " + " ".join(extra_build_args + ["--target", "install"])
+    )
+
     cmds = [
         cmake
-        + ' .. -G "NMake Makefiles" -DCMAKE_BUILD_TYPE=Release '
-        + "-DCMAKE_PREFIX_PATH="
-        + os.environ["CMAKE_PREFIX_PATH"]
-        + " "
+        + " .. "
+        + (generator_flag + " " if generator_flag else "")
+        + build_type_flag
+        + cmake_prefix_path_flag
         + "-DLIBRAW_PATH="
         + libraw_dir.replace("\\", "/")
         + " "
@@ -173,7 +205,7 @@ def windows_libraw_compile():
             else ""
         )
         + "-DCMAKE_INSTALL_PREFIX=install",
-        cmake + " --build . --target install",
+        build_cmd,
     ]
     for cmd in cmds:
         print(cmd)
