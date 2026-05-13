@@ -30,7 +30,8 @@ function Initialize-VS {
     $VS_INIT_CMD_SUFFIX = "Common7\Tools\vsdevcmd.bat"
 
     $VS_ARCH = if ($env:PYTHON_ARCH -eq 'x86') { 'x86' } else { 'x64' }
-    $VS_INIT_ARGS = "-arch=$VS_ARCH -no_logo"
+    $VS_HOST_ARCH = if ([Environment]::Is64BitOperatingSystem) { 'x64' } else { 'x86' }
+    $VS_INIT_ARGS = "-arch=$VS_ARCH -host_arch=$VS_HOST_ARCH -no_logo"
 
     $found = $false
     :outer foreach ($VS_ROOT in $VS_ROOTS) {
