@@ -242,7 +242,10 @@ def windows_libraw_compile():
             alt = os.path.join(folder, "lib" + filename)
             if os.path.exists(alt):
                 src = alt
-        dest = "rawpy/" + filename
+        # Bundle under the DLL's real name: the extension links the import
+        # lib of the same basename, so the loader resolves exactly this
+        # filename at import time (raw_r.dll vs libraw_r.dll must match).
+        dest = "rawpy/" + os.path.basename(src)
         print("copying", src, "->", dest)
         shutil.copyfile(src, dest)
 
