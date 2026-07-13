@@ -111,11 +111,16 @@ def get_windows_cmake_generator():
     The VS default generator does not accept -DCMAKE_BUILD_TYPE, so the build
     command must pass --config Release instead.
     """
-    if shutil.which("ninja"):
+    # Ninja/NMake only produce the MSVC-named artifacts (raw_r.lib/.dll)
+    # when cl.exe is actually on PATH (vsdevcmd environment). In a bare pip
+    # build env they silently pick clang with GNU-style naming
+    # (libraw_r.dll + libraw_r.dll.a) and the extension link fails with
+    # LNK1181. Prefer them only alongside cl; otherwise use the VS default
+    # generator, which locates the MSVC toolchain by itself.
+    if shutil.which("ninja") and shutil.which("cl"):
         return '-G "Ninja"', []
-    if shutil.which("nmake"):
+    if shutil.which("nmake") and shutil.which("cl"):
         return '-G "NMake Makefiles"', []
-    # No single-config generator found; fall back to the default VS generator.
     # Multi-config generators ignore CMAKE_BUILD_TYPE, so we pass --config at
     # build time instead.
     return "", ["--config", "Release"]
