@@ -384,6 +384,20 @@ class build_ext(_build_ext):
         if not useSystemLibraw:
             if isWindows:
                 windows_libraw_compile()
+                # Ninja/clang cmake generators emit lib-prefixed import libs
+                # (libraw_r.lib) where MSVC emits raw_r.lib. The extension's
+                # libraries list was fixed at module scope before the LibRaw
+                # build ran — re-point it at whichever import lib actually
+                # exists now.
+                lib_dir = os.path.join(get_install_dir(), "lib")
+                if not os.path.exists(
+                    os.path.join(lib_dir, "raw_r.lib")
+                ) and os.path.exists(os.path.join(lib_dir, "libraw_r.lib")):
+                    for ext in self.extensions:
+                        ext.libraries = [
+                            "libraw_r" if name == "raw_r" else name
+                            for name in ext.libraries
+                        ]
             elif isMac or isLinux:
                 unix_libraw_compile()
         super().run()
