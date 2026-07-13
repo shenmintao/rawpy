@@ -235,6 +235,13 @@ def windows_libraw_compile():
 
     for filename, folder in dll_runtime_libs:
         src = os.path.join(folder, filename)
+        if not os.path.exists(src):
+            # Ninja/clang cmake generators emit lib-prefixed DLLs
+            # (libraw_r.dll) where MSVC emits raw_r.dll; accept either so
+            # the build survives whichever generator the environment picks.
+            alt = os.path.join(folder, "lib" + filename)
+            if os.path.exists(alt):
+                src = alt
         dest = "rawpy/" + filename
         print("copying", src, "->", dest)
         shutil.copyfile(src, dest)
